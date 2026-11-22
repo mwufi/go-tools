@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <title>go · finding it</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%231a1916'/><path d='M11 24 L20 8' stroke='%23ff4a1c' stroke-width='3.5' stroke-linecap='round'/></svg>" />
+    <!--GO_CONFIG-->
+  </head>
+  <body>
+    <main class="think">
+      <canvas class="shader" aria-hidden="true"></canvas>
+      <div class="think-inner">
+        <div class="eyebrow" id="status">Finding the page</div>
+        <h1 class="think-q serif" id="q"></h1>
+        <div id="result" class="think-result" hidden>
+          <div class="think-dest"><span class="pin"></span><span id="host" class="mono"></span></div>
+          <p id="why" class="muted"></p>
+          <div class="think-progress"><i id="bar"></i></div>
+          <div class="think-actions">
+            <a class="btn primary" id="go">Go now</a>
+            <button class="btn" id="stay">Stay here</button>
+            <button class="btn ghost" id="keep" hidden>Always go here</button>
+            <a class="btn ghost" id="save" hidden></a>
+          </div>
+        </div>
+        <a class="think-instead" id="instead">Search the web instead</a>
+      </div>
+    </main>
+    <script type="module" src="/src/think.ts"></script>
+  </body>
+</html>

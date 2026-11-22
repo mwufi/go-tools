@@ -1,0 +1,32 @@
+{
+  "name": "go-tools",
+  "version": "1.0.0",
+  "description": "go/ links on Convex: personal and team shortcuts for your address bar",
+  "scripts": {
+    "test": "node --experimental-strip-types --no-warnings --test tests/*.test.ts",
+    "build": "node scripts/build-web.mjs",
+    "dev:web": "vite",
+    "deploy": "node scripts/build-web.mjs && npx convex deploy",
+    "typecheck": "tsc -p web/tsconfig.json && tsc -p convex/tsconfig.json"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "convex": "^1.51.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.8",
+    "vite-plugin-singlefile": "^2.3.4"
+  },
+  "type": "module",
+  "bin": {
+    "go": "cli/go.mjs"
+  }
+}

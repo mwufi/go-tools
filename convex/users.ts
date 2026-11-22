@@ -1,0 +1,172 @@
+import { v } from "convex/values";
+import { action, internalMutation, mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
+import { hashToken, requireUser, teamIdsFor } from "./lib/auth";
+import { newToken } from "./lib/random";
+import { SEARCH_ENGINES } from "./lib/go";
+import { sha256Hex } from "./lib/sha256";
+
+const varsValidator = v.record(v.string(), v.string());
+
+function cleanVars(vars: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, val] of Object.entries(vars)) {
+    const key = k.trim().toLowerCase();
+    if (!/^[a-z][a-z0-9_]{0,31}$/.test(key)) throw new Error(`Bad variable name "${k}"`);
+    if (val.trim()) out[key] = val.trim();
+  }
+  return out;
+}
+
+/** Sign up with an invite code (GO_INVITE_CODE) or a team join code. Returns both tokens once. */
+export const signup = action({
+  args: { name: v.string(), github: v.optional(v.string()), code: v.optional(v.string()) },
+  handler: async (ctx, args): Promise<{ searchToken: string; apiToken: string }> => {
+    const searchToken = newToken("search");
+    const apiToken = newToken("api");
+    await ctx.runMutation(internal.users.createUser, {
+      name: args.name,
+      github: args.github,
+      code: args.code,
+      inviteOk: !process.env.GO_INVITE_CODE || args.code?.trim() === process.env.GO_INVITE_CODE,
+      searchHash: hashToken(searchToken),
+      apiHash: hashToken(apiToken),
+      searchHint: searchToken.slice(-4),
+      apiHint: apiToken.slice(-4),
+    });
+    return { searchToken, apiToken };
+  },
+});
+
+export const createUser = internalMutation({
+  args: {
+    name: v.string(),
+    github: v.optional(v.string()),
+    code: v.optional(v.string()),
+    inviteOk: v.boolean(),
+    searchHash: v.string(),
+    apiHash: v.string(),
+    searchHint: v.string(),
+    apiHint: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const name = args.name.trim();
+    if (!name) throw new Error("Tell us your name");
+    let teamId: Id<"teams"> | undefined;
+    if (!args.inviteOk) {
+      const code = args.code?.trim() ?? "";
+      const team = code
+        ? await ctx.db.query("teams").withIndex("by_join", (q) => q.eq("joinCodeHash", sha256Hex("join:" + code))).unique()
+        : null;
+      if (!team) throw new Error("That invite code doesn't work");
+      teamId = team._id;
+    }
+    const vars: Record<string, string> = {};
+    if (args.github?.trim()) vars.github = args.github.trim().replace(/^@/, "");
+    const userId = await ctx.db.insert("users", {
+      name,
+      vars,
+      fallbackSearch: "google",
+      llmEnabled: true,
+      llmMy: true,
+      primaryTeamId: teamId,
+    });
+    if (teamId) await ctx.db.insert("members", { teamId, userId, role: "member" });
+    await ctx.db.insert("tokens", { userId, tokenHash: args.searchHash, kind: "search", label: "Browser", hint: args.searchHint });
+    await ctx.db.insert("tokens", { userId, tokenHash: args.apiHash, kind: "api", label: "Web app", hint: args.apiHint });
+  },
+});
+
+export const me = query({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    let user;
+    try {
+      user = await requireUser(ctx, token);
+    } catch {
+      return null;
+    }
+    const teamIds = await teamIdsFor(ctx, user);
+    const teams = [];
+    for (const id of teamIds) {
+      const t = await ctx.db.get(id);
+      const m = await ctx.db
+        .query("members")
+        .withIndex("by_team_user", (q) => q.eq("teamId", id).eq("userId", user._id))
+        .unique();
+      if (t) teams.push({ _id: t._id, slug: t.slug, name: t.name, vars: t.vars, role: m?.role ?? "member" });
+    }
+    const tokens = (
+      await ctx.db.query("tokens").withIndex("by_user", (q) => q.eq("userId", user._id)).collect()
+    ).map((t) => ({ _id: t._id, kind: t.kind, label: t.label, hint: t.hint, createdAt: t._creationTime }));
+    return {
+      _id: user._id,
+      name: user.name,
+      vars: user.vars,
+      fallbackSearch: user.fallbackSearch,
+      llmEnabled: user.llmEnabled,
+      llmMy: user.llmMy,
+      primaryTeamId: user.primaryTeamId ?? null,
+      teams,
+      tokens,
+      llmConfigured: !!process.env.LLM_API_KEY,
+      engines: Object.entries(SEARCH_ENGINES).map(([key, e]) => ({ key, name: e.name })),
+    };
+  },
+});
+
+export const updateSettings = mutation({
+  args: {
+    token: v.string(),
+    name: v.optional(v.string()),
+    vars: v.optional(varsValidator),
+    fallbackSearch: v.optional(v.string()),
+    llmEnabled: v.optional(v.boolean()),
+    llmMy: v.optional(v.boolean()),
+    primaryTeamId: v.optional(v.id("teams")),
+  },
+  handler: async (ctx, { token, ...patch }) => {
+    const user = await requireUser(ctx, token);
+    if (patch.vars) patch.vars = cleanVars(patch.vars);
+    if (patch.fallbackSearch && !SEARCH_ENGINES[patch.fallbackSearch] && !patch.fallbackSearch.includes("{*}"))
+      throw new Error("Pick an engine, or give a URL with {*} where the query goes");
+    if (patch.name !== undefined && !patch.name.trim()) throw new Error("Name can't be empty");
+    await ctx.db.patch(user._id, patch);
+  },
+});
+
+/** Mint another token (e.g. one per device, or an API token for an agent). */
+export const createToken = action({
+  args: { token: v.string(), kind: v.union(v.literal("search"), v.literal("api")), label: v.string() },
+  handler: async (ctx, args): Promise<string> => {
+    const fresh = newToken(args.kind);
+    await ctx.runMutation(internal.users.storeToken, {
+      token: args.token,
+      kind: args.kind,
+      label: args.label.trim() || (args.kind === "api" ? "Agent" : "Browser"),
+      hash: hashToken(fresh),
+      hint: fresh.slice(-4),
+    });
+    return fresh;
+  },
+});
+
+export const storeToken = internalMutation({
+  args: { token: v.string(), kind: v.union(v.literal("search"), v.literal("api")), label: v.string(), hash: v.string(), hint: v.string() },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx, args.token);
+    await ctx.db.insert("tokens", { userId: user._id, tokenHash: args.hash, kind: args.kind, label: args.label, hint: args.hint });
+  },
+});
+
+export const revokeToken = mutation({
+  args: { token: v.string(), tokenId: v.id("tokens") },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx, args.token);
+    const row = await ctx.db.get(args.tokenId);
+    if (!row || row.userId !== user._id) throw new Error("Not your token");
+    if (row.tokenHash === hashToken(args.token)) throw new Error("That's the token this page is using");
+    await ctx.db.delete(args.tokenId);
+  },
+});
