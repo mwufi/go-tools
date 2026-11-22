@@ -136,7 +136,7 @@ export function Landing({ signedOutReason }: { signedOutReason?: string }) {
           </div>
           {mode === "join" ? (
             <>
-              <label className="field"><span>Your name</span><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Zen" required autoFocus /></label>
+              <label className="field"><span>Your name</span><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Zen" required /></label>
               <label className="field"><span>GitHub username</span><input className="input mono" value={github} onChange={(e) => setGithub(e.target.value)} placeholder="mwufi" /></label>
               <label className="field"><span>Invite or team code</span><input className="input mono" value={code} onChange={(e) => setCode(e.target.value)} placeholder="from whoever runs this go" /></label>
             </>
