@@ -1,0 +1,10 @@
+project_id  = "your-gcp-project"
+convex_site = "https://tame-crow-881.convex.site"
+image       = "us-west2-docker.pkg.dev/your-gcp-project/go-tools/edge:latest"
+
+# Day one: one region, its run.app URL, no domain, no load balancer.
+regions = ["us-west2"]
+
+# Later, for a spread-out team:
+# regions = ["us-west2", "us-east1", "europe-west1"]
+# domain  = "go.example.com"

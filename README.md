@@ -58,6 +58,9 @@ npm run deploy:edge
 npx convex env set GO_EDGE_URL https://go-tools.<you>.workers.dev   # the app then hands out edge search URLs
 ```
 
+On GCP instead, see [`deploy/gcp`](deploy/gcp/README.md): the same handler runs on Cloud Run
+(`server/node.ts`), one region to start, a global load balancer when you add more.
+
 ## Setup
 
 ```bash

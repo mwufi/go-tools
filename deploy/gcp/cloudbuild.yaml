@@ -1,0 +1,5 @@
+# Builds the edge image from the repo root. Used by deploy.sh.
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-f", "server/Dockerfile", "-t", "${_IMAGE}", "."]
+images: ["${_IMAGE}"]
