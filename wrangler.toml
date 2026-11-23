@@ -1,0 +1,7 @@
+name = "go-tools"
+main = "worker/src/index.ts"
+compatibility_date = "2026-11-01"
+workers_dev = true
+
+[vars]
+CONVEX_SITE = "https://tame-crow-881.convex.site"

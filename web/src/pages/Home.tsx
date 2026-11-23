@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
-import { LLM_AVAILABLE, SITE_URL } from "../config";
+import { LLM_AVAILABLE, SEARCH_BASE } from "../config";
 import { useSession } from "../store";
 import { linkProps } from "../router";
 import { Arrow, IllusSignpost, ScopeChip, hostOf } from "../ui";
@@ -15,7 +15,7 @@ function CommandBar() {
   const go = () => {
     if (!q.trim()) return;
     const t = session.searchToken ?? session.apiToken;
-    location.href = `${SITE_URL}/s?q=${encodeURIComponent(q)}&t=${encodeURIComponent(t)}`;
+    location.href = `${SEARCH_BASE}/s?q=${encodeURIComponent(q)}&t=${encodeURIComponent(t)}`;
   };
   let dest: React.ReactNode = <span className="faint">Try <code>my prs</code>, <code>gh owner/repo</code>, or <code>? anything in plain words</code></span>;
   if (q.trim() && r) {

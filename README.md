@@ -37,6 +37,27 @@ Templates: `{*}` (all words after the keyword), `{1}` `{2}`, `{me.github}` (your
 variables), `{team.github_org}` (the team's), `%s` (bunny1 style). Personal shortcuts
 override team ones, which override built-ins (`convex/seed.ts`).
 
+## Edge Worker (fast redirects far from Convex)
+
+Convex runs in US East, so from the West Coast each redirect crosses the country.
+`worker/` is a Cloudflare Worker that answers `/s` at the edge location nearest you:
+
+- It keeps a snapshot of your shortcuts, teams and variables (`GET /api/snapshot?t=`),
+  in memory and in the colo's cache, and resolves with the same code Convex uses
+  (`convex/lib/core.ts`).
+- Every redirect is served from the snapshot; a background refresh runs at most every 2 s,
+  so another device's edit shows up by the next search.
+- The web app pings `/_refresh` on the same edge after every change, so your own edits
+  apply on your very next search.
+- Everything else (web app, thinking page, API) is proxied to Convex.
+
+```bash
+npx wrangler login            # or CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID
+# set CONVEX_SITE in wrangler.toml, then:
+npm run deploy:edge
+npx convex env set GO_EDGE_URL https://go-tools.<you>.workers.dev   # the app then hands out edge search URLs
+```
+
 ## Setup
 
 ```bash
@@ -91,7 +112,7 @@ npm run typecheck
 
 ## Security notes
 
-- Search tokens (in the browser's search URL) can only resolve queries and keep an LLM
-  answer for you. API tokens can change shortcuts. Tokens are stored as hashes.
+- Search tokens (in the browser's search URL) can only resolve queries, read the snapshot
+  of shortcuts that resolution uses, and keep an LLM answer for you. API tokens can change shortcuts. Tokens are stored as hashes.
 - The search URL ends up in browser history; revoke a token in Settings if it leaks.
 - Team join codes let anyone holding them join and edit team shortcuts; rotate them in Settings.

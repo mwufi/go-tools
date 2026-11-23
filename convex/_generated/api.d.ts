@@ -11,6 +11,7 @@
 import type * as http from "../http.js";
 import type * as lib_assets from "../lib/assets.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as lib_core from "../lib/core.js";
 import type * as lib_go from "../lib/go.js";
 import type * as lib_random from "../lib/random.js";
 import type * as lib_recipes from "../lib/recipes.js";
@@ -32,6 +33,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   "lib/assets": typeof lib_assets;
   "lib/auth": typeof lib_auth;
+  "lib/core": typeof lib_core;
   "lib/go": typeof lib_go;
   "lib/random": typeof lib_random;
   "lib/recipes": typeof lib_recipes;

@@ -15,7 +15,7 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
 
 const config = () =>
-  `<script>window.__GO__=${JSON.stringify({ convexUrl: process.env.CONVEX_CLOUD_URL, siteUrl: process.env.CONVEX_SITE_URL, llm: llmAvailable() })}</script>`;
+  `<script>window.__GO__=${JSON.stringify({ convexUrl: process.env.CONVEX_CLOUD_URL, siteUrl: process.env.CONVEX_SITE_URL, edgeUrl: process.env.GO_EDGE_URL ?? null, llm: llmAvailable() })}</script>`;
 
 const html = (page: string) =>
   new Response(page.replace("<!--GO_CONFIG-->", config()), {
@@ -38,7 +38,7 @@ http.route({
       case "redirect":
         // Scheduling the click-count write costs ~13 ms, so only 1 in 10 redirects
         // pays it and counts for 10. Counts are approximate; redirects stay fast.
-        if (r.linkId && Math.random() < 0.1) await ctx.scheduler.runAfter(0, internal.links.bump, { linkId: r.linkId, by: 10 });
+        if (r.linkId && Math.random() < 0.1) await ctx.scheduler.runAfter(0, internal.links.bump, { linkId: r.linkId as Id<"links">, by: 10 });
         return redirect(r.url);
       case "search":
         return redirect(r.url);
@@ -86,6 +86,31 @@ http.route({
   <Url type="application/x-suggestions+json" method="get" template="${u.origin}/suggest?q={searchTerms}${tq}"/>
 </OpenSearchDescription>`;
     return new Response(xml, { headers: { "Content-Type": "application/opensearchdescription+xml" } });
+  }),
+});
+
+// Snapshot for the edge Worker: everything this token's queries can resolve to.
+// Readable with the same search token the browser already sends.
+http.route({
+  path: "/api/snapshot",
+  method: "GET",
+  handler: httpAction(async (ctx, req) => {
+    const t = new URL(req.url).searchParams.get("t");
+    const snap = await ctx.runQuery(internal.resolve.snapshot, { tokenHash: t ? hashToken(t) : undefined, llm: llmAvailable() });
+    if (t && !snap.user) return json({ error: "unknown token" }, 404);
+    return json(snap);
+  }),
+});
+
+// Sampled click counts reported by the edge Worker (off its hot path).
+http.route({
+  path: "/api/click",
+  method: "POST",
+  handler: httpAction(async (ctx, req) => {
+    const b = (await req.json().catch(() => ({}))) as { t?: string; linkId?: string; by?: number };
+    if (!b.t || !b.linkId) return json({ error: "t and linkId are required" }, 400);
+    await ctx.runMutation(internal.links.bumpFromEdge, { tokenHash: hashToken(b.t), linkId: b.linkId, by: Math.min(Math.max(b.by ?? 1, 1), 10) });
+    return json({ ok: true });
   }),
 });
 

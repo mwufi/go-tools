@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { internalMutation, mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { requireMember, requireUser, teamIdsFor } from "./lib/auth";
+import { requireMember, requireUser, teamIdsFor, userByHash } from "./lib/auth";
 import { normalizeKeyword, validateKeyword, validateUrl } from "./lib/go";
 
 const scopeArg = v.union(v.literal("user"), v.object({ teamId: v.id("teams") }));
@@ -200,6 +200,17 @@ export const bump = internalMutation({
   handler: async (ctx, { linkId, by }) => {
     const l = await ctx.db.get(linkId);
     if (l) await ctx.db.patch(linkId, { clicks: l.clicks + (by ?? 1) });
+  },
+});
+
+export const bumpFromEdge = internalMutation({
+  args: { tokenHash: v.string(), linkId: v.string(), by: v.number() },
+  handler: async (ctx, a) => {
+    const user = await userByHash(ctx, a.tokenHash);
+    const id = ctx.db.normalizeId("links", a.linkId);
+    if (!user || !id) return;
+    const l = await ctx.db.get(id);
+    if (l) await ctx.db.patch(id, { clicks: l.clicks + a.by });
   },
 });
 

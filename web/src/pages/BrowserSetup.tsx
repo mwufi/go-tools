@@ -1,10 +1,10 @@
-import { SITE_URL } from "../config";
+import { SEARCH_BASE } from "../config";
 import { searchUrlFor, useSession } from "../store";
 import { CopyField } from "../ui";
 
 export function BrowserSetup() {
   const session = useSession();
-  const url = searchUrlFor(SITE_URL, session?.searchToken);
+  const url = searchUrlFor(SEARCH_BASE, session?.searchToken);
   return (
     <div className="form-grid">
       {!session?.searchToken && (
@@ -28,7 +28,7 @@ export function BrowserSetup() {
         </div>
       </div>
       <p className="hint" style={{ margin: 0 }}>
-        Address-bar suggestions: add <code>{`${SITE_URL}/suggest?q=%s${session?.searchToken ? `&t=${session.searchToken}` : ""}`}</code> as the suggestions URL where your browser allows it.
+        Address-bar suggestions: add <code>{`${SEARCH_BASE}/suggest?q=%s${session?.searchToken ? `&t=${session.searchToken}` : ""}`}</code> as the suggestions URL where your browser allows it.
       </p>
     </div>
   );

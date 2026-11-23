@@ -2,88 +2,73 @@ import { v } from "convex/values";
 import { internalQuery, query, type QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { userByHash, teamIdsFor, hashToken } from "./lib/auth";
-import {
-  candidates,
-  fillTemplate,
-  normalizeQuery,
-  parseQuery,
-  searchUrl,
-} from "./lib/go";
+import { resolveWith, type LinkLite, type Snapshot, type Source, type UserLite } from "./lib/core";
 
-export type Resolution =
-  | { kind: "redirect"; url: string; via: "shortcut" | "learned"; linkId?: Id<"links">; keyword?: string; scope?: string }
-  | { kind: "think"; q: string }
-  | { kind: "search"; url: string }
-  | { kind: "create"; keyword: string }
-  | { kind: "info"; keyword: string }
-  | { kind: "home" };
+export type { Resolution } from "./lib/core";
+
+async function sourceFor(ctx: QueryCtx, tokenHash: string | undefined): Promise<Source> {
+  const user = await userByHash(ctx, tokenHash);
+  const teamIds = user ? await teamIdsFor(ctx, user) : [];
+  return {
+    user: user ? toUserLite(user) : null,
+    scopes: [...(user ? [user._id as string] : []), ...teamIds.map(String), "global"],
+    teamVars: async (id) => (await ctx.db.get(id as Id<"teams">))?.vars ?? {},
+    link: async (scopeId, keyword) => {
+      const l = await ctx.db
+        .query("links")
+        .withIndex("by_scope_keyword", (x) => x.eq("scopeId", scopeId).eq("keyword", keyword))
+        .unique();
+      return l ? toLinkLite(l) : null;
+    },
+    learned: async (queryNorm) => {
+      if (!user) return null;
+      const row = await ctx.db
+        .query("learned")
+        .withIndex("by_user_query", (x) => x.eq("userId", user._id).eq("queryNorm", queryNorm))
+        .order("desc")
+        .first();
+      return row?.kept ? row.url : null;
+    },
+  };
+}
+
+const toUserLite = (u: Doc<"users">): UserLite => ({
+  id: u._id, vars: u.vars, fallbackSearch: u.fallbackSearch, llmEnabled: u.llmEnabled, llmMy: u.llmMy, primaryTeamId: u.primaryTeamId,
+});
+const toLinkLite = (l: Doc<"links">): LinkLite => ({
+  id: l._id, scope: l.scope, scopeId: l.scopeId, keyword: l.keyword, url: l.url, emptyUrl: l.emptyUrl,
+});
 
 /**
  * The hot path. One query: token lookup, a handful of index point reads,
  * template fill. No writes. Pure function of its args + the rows it reads,
  * so Convex can serve repeats from its query cache.
  */
-async function resolveImpl(
-  ctx: QueryCtx,
-  tokenHash: string | undefined,
-  q: string,
-  llmAvailable: boolean,
-): Promise<Resolution> {
-  const parsed = parseQuery(q);
-  if (parsed.kind === "home") return { kind: "home" };
-  if (parsed.kind === "info") return { kind: "info", keyword: parsed.keyword };
-
-  const user = await userByHash(ctx, tokenHash);
-  const teamIds = user ? await teamIdsFor(ctx, user) : [];
-  const scopes: string[] = [...(user ? [user._id as string] : []), ...teamIds.map(String), "global"];
-  const teams = new Map<string, Doc<"teams">>();
-  const teamVars = async (teamId?: string) => {
-    if (!teamId) return {};
-    if (!teams.has(teamId)) {
-      const t = await ctx.db.get(teamId as Id<"teams">);
-      if (t) teams.set(teamId, t);
-    }
-    return teams.get(teamId)?.vars ?? {};
-  };
-
-  if (!parsed.askLlm) {
-    for (const c of candidates(parsed.lower)) {
-      for (const scopeId of scopes) {
-        const link = await ctx.db
-          .query("links")
-          .withIndex("by_scope_keyword", (x) => x.eq("scopeId", scopeId).eq("keyword", c.keyword))
-          .unique();
-        if (!link) continue;
-        const args = parsed.words.slice(c.n);
-        const vars = {
-          me: user?.vars ?? {},
-          team: await teamVars(link.scope === "team" ? link.scopeId : (user?.primaryTeamId ?? teamIds[0])),
-        };
-        let url = fillTemplate(link.url, args, vars);
-        if (url === null && args.length === 0 && link.emptyUrl) url = fillTemplate(link.emptyUrl, [], vars);
-        if (url === null) return { kind: "info", keyword: link.keyword };
-        return { kind: "redirect", url, via: "shortcut", linkId: link._id, keyword: link.keyword, scope: link.scope };
-      }
-    }
-  }
-
-  if (user) {
-    const learned = await ctx.db
-      .query("learned")
-      .withIndex("by_user_query", (x) => x.eq("userId", user._id).eq("queryNorm", normalizeQuery(parsed.raw)))
-      .order("desc")
-      .first();
-    if (learned?.kept) return { kind: "redirect", url: learned.url, via: "learned" };
-  }
-
-  const wantsLlm =
-    parsed.askLlm || (user?.llmMy === true && parsed.lower[0] === "my" && parsed.words.length > 1);
-  if (wantsLlm && llmAvailable && user?.llmEnabled) return { kind: "think", q: parsed.raw };
-
-  if (parsed.explicit && parsed.words.length === 1) return { kind: "create", keyword: parsed.lower[0] };
-
-  return { kind: "search", url: searchUrl(user?.fallbackSearch ?? "google", parsed.raw) };
+async function resolveImpl(ctx: QueryCtx, tokenHash: string | undefined, q: string, llmAvailable: boolean) {
+  return await resolveWith(await sourceFor(ctx, tokenHash), q, llmAvailable);
 }
+
+/** Everything one token's queries can resolve to, for the edge Worker's cache. */
+export const snapshot = internalQuery({
+  args: { tokenHash: v.optional(v.string()), llm: v.boolean() },
+  handler: async (ctx, args): Promise<Snapshot> => {
+    const user = await userByHash(ctx, args.tokenHash);
+    const teamIds = user ? await teamIdsFor(ctx, user) : [];
+    const scopes = [...(user ? [user._id as string] : []), ...teamIds.map(String), "global"];
+    const links: LinkLite[] = [];
+    for (const s of scopes) {
+      for (const l of await ctx.db.query("links").withIndex("by_scope_keyword", (x) => x.eq("scopeId", s)).collect()) links.push(toLinkLite(l));
+    }
+    const teams: Record<string, Record<string, string>> = {};
+    for (const id of teamIds) teams[id] = (await ctx.db.get(id))?.vars ?? {};
+    const learned: Record<string, string> = {};
+    if (user) {
+      const rows = await ctx.db.query("learned").withIndex("by_user_query", (x) => x.eq("userId", user._id)).collect();
+      for (const r of rows) if (r.kept) learned[r.queryNorm] = r.url; // ascending, so the newest wins
+    }
+    return { v: 1, at: Date.now(), llm: args.llm, user: user ? toUserLite(user) : null, scopes, teams, links, learned };
+  },
+});
 
 export const resolve = internalQuery({
   args: { tokenHash: v.optional(v.string()), q: v.string(), llmAvailable: v.boolean() },

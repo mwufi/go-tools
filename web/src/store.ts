@@ -35,3 +35,9 @@ export function useSession(): Session {
 export function searchUrlFor(siteUrl: string, searchToken?: string) {
   return `${siteUrl}/s?q=%s${searchToken ? `&t=${searchToken}` : ""}`;
 }
+
+/** Tell this browser's edge location to refetch our shortcuts right away. */
+export function pokeEdge(edgeUrl: string, siteUrl: string) {
+  if (!session?.searchToken || edgeUrl === siteUrl) return;
+  fetch(`${edgeUrl}/_refresh?t=${encodeURIComponent(session.searchToken)}`, { mode: "no-cors", keepalive: true }).catch(() => {});
+}

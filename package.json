@@ -8,7 +8,9 @@
     "dev:web": "vite",
     "deploy": "node scripts/build-web.mjs && npx convex deploy",
     "typecheck": "tsc -p web/tsconfig.json && tsc -p convex/tsconfig.json",
-    "deploy:dev": "node scripts/build-web.mjs && npx convex dev --once"
+    "deploy:dev": "node scripts/build-web.mjs && npx convex dev --once",
+    "deploy:edge": "wrangler deploy",
+    "dev:edge": "wrangler dev"
   },
   "author": "",
   "license": "ISC",
@@ -18,13 +20,15 @@
     "react-dom": "^19.3.1"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261123.1",
     "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.3.0",
     "typescript": "^5.9.3",
     "vite": "^8.3.8",
-    "vite-plugin-singlefile": "^2.3.4"
+    "vite-plugin-singlefile": "^2.3.4",
+    "wrangler": "^4.167.0"
   },
   "type": "module",
   "bin": {
