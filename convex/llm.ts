@@ -1,3 +1,4 @@
+import { edgeChanged } from "./edge";
 import { v } from "convex/values";
 import { internalMutation, internalQuery, type ActionCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -64,6 +65,7 @@ export const keep = internalMutation({
     const row = await ctx.db.get(a.learnedId);
     if (!user || !row || row.userId !== user._id) throw new Error("Not yours");
     await ctx.db.patch(row._id, { kept: true });
+    await edgeChanged(ctx, ["learned", row._id]);
   },
 });
 

@@ -5,3 +5,13 @@ workers_dev = true
 
 [vars]
 CONVEX_SITE = "https://tame-crow-881.convex.site"
+
+# Shortcuts the Worker serves from. Create it near you, then paste its id:
+#   npx wrangler d1 create go-tools --location wnam
+[[d1_databases]]
+binding = "DB"
+database_name = "go-tools"
+database_id = "00000000-0000-0000-0000-000000000000"
+
+# Also set the shared secret (same value as EDGE_SYNC_SECRET on Convex):
+#   npx wrangler secret put EDGE_SYNC_SECRET

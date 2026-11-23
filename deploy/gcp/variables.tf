@@ -26,9 +26,9 @@ variable "min_instances" {
 }
 
 variable "max_instances" {
-  description = "Cap per region. Each instance keeps its own snapshot cache, so fewer is fresher."
+  description = "Cap per region. A push from Convex reaches one instance; others catch up within SYNC_CHECK_MS, so 1 is simplest."
   type        = number
-  default     = 3
+  default     = 1
 }
 
 variable "domain" {
@@ -41,4 +41,10 @@ variable "name" {
   description = "Prefix for every resource, so this can share a project safely."
   type        = string
   default     = "go-tools"
+}
+
+variable "edge_sync_secret" {
+  description = "Shared with Convex's EDGE_SYNC_SECRET; lets this edge read the change feed."
+  type        = string
+  sensitive   = true
 }

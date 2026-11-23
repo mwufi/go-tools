@@ -1,11 +1,22 @@
 // go-tools edge server for Cloud Run (or any Node host). Same handler as the
-// Cloudflare Worker; the snapshot cache is this instance's memory.
+// Cloudflare Worker; the shortcuts live in this instance's memory, loaded
+// from Convex at startup and kept current by push.
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { handle } from "../edge/handler";
+import { handle, sync, type Platform } from "../edge/handler";
+import { MemoryStore } from "../edge/store";
 
 const convexSite = process.env.CONVEX_SITE;
 if (!convexSite) throw new Error("Set CONVEX_SITE, e.g. https://tame-crow-881.convex.site");
 const port = Number(process.env.PORT ?? 8080);
+const platform: Platform = {
+  convexSite,
+  syncSecret: process.env.EDGE_SYNC_SECRET,
+  store: new MemoryStore(),
+  // A push reaches one instance; others catch up on their next search after this long.
+  checkEveryMs: Number(process.env.SYNC_CHECK_MS ?? 60_000),
+  background: (p) => void p.catch(() => {}),
+};
+if (platform.syncSecret) sync(platform).catch((e) => console.error("initial sync", e));
 
 async function toRequest(req: IncomingMessage): Promise<Request> {
   const proto = (req.headers["x-forwarded-proto"] as string) ?? "http";
@@ -33,7 +44,7 @@ async function send(res: ServerResponse, r: Response) {
 
 createServer(async (req, res) => {
   try {
-    await send(res, await handle(await toRequest(req), { convexSite, background: (p) => void p.catch(() => {}) }));
+    await send(res, await handle(await toRequest(req), platform));
   } catch (e) {
     console.error(e);
     res.writeHead(502).end("upstream error");

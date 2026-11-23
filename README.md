@@ -37,29 +37,34 @@ Templates: `{*}` (all words after the keyword), `{1}` `{2}`, `{me.github}` (your
 variables), `{team.github_org}` (the team's), `%s` (bunny1 style). Personal shortcuts
 override team ones, which override built-ins (`convex/seed.ts`).
 
-## Edge Worker (fast redirects far from Convex)
+## Edge (fast redirects far from Convex)
 
 Convex runs in US East, so from the West Coast each redirect crosses the country.
-`worker/` is a Cloudflare Worker that answers `/s` at the edge location nearest you:
+`worker/` is a Cloudflare Worker that answers `/s` at the edge location nearest you,
+from its own copy of the shortcuts in D1. Convex keeps that copy current by **push**:
 
-- It keeps a snapshot of your shortcuts, teams and variables (`GET /api/snapshot?t=`),
-  in memory and in the colo's cache, and resolves with the same code Convex uses
-  (`convex/lib/core.ts`).
-- Every redirect is served from the snapshot; a background refresh runs at most every 2 s,
-  so another device's edit shows up by the next search.
-- The web app pings `/_refresh` on the same edge after every change, so your own edits
-  apply on your very next search.
-- Everything else (web app, thinking page, API) is proxied to Convex.
+- Every mutation that changes something a search can see appends to a numbered change
+  log (`edgeLog`, see `convex/edge.ts`) and pokes each edge in `EDGE_SYNC_URLS` (`POST /_sync`).
+- The edge pulls `/api/edge/changes?after=<its seq>`, or `/api/edge/dump` the first time,
+  and applies them to D1 in one transaction. Edges never poll on a timer, so an idle setup costs nothing.
+- As a safety net, a search also checks for missed changes if the last check was over 5 minutes ago
+  (a 60-byte response when nothing changed).
+- Resolution uses the same code as Convex (`convex/lib/core.ts`); everything else (web app,
+  thinking page, API) is proxied to Convex.
 
 ```bash
-npx wrangler login            # or CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID
-# set CONVEX_SITE in wrangler.toml, then:
+openssl rand -hex 24                                  # pick a shared secret
+npx convex env set EDGE_SYNC_SECRET <secret>
+npx wrangler d1 create go-tools --location wnam       # paste the id into wrangler.toml
+npx wrangler secret put EDGE_SYNC_SECRET              # same secret
 npm run deploy:edge
+npx convex env set EDGE_SYNC_URLS https://go-tools.<you>.workers.dev
 npx convex env set GO_EDGE_URL https://go-tools.<you>.workers.dev   # the app then hands out edge search URLs
 ```
 
 On GCP instead, see [`deploy/gcp`](deploy/gcp/README.md): the same handler runs on Cloud Run
-(`server/node.ts`), one region to start, a global load balancer when you add more.
+(`server/node.ts`) and keeps the shortcuts in memory, loaded at startup and updated by the same push.
+List both URLs in `EDGE_SYNC_URLS` to run them side by side.
 
 ## Setup
 
@@ -115,7 +120,7 @@ npm run typecheck
 
 ## Security notes
 
-- Search tokens (in the browser's search URL) can only resolve queries, read the snapshot
-  of shortcuts that resolution uses, and keep an LLM answer for you. API tokens can change shortcuts. Tokens are stored as hashes.
+- Search tokens (in the browser's search URL) can only resolve queries and keep an LLM answer for you. API tokens can change shortcuts. Tokens are stored as hashes.
+- Edges hold token hashes and every shortcut. The change feed needs `EDGE_SYNC_SECRET`; keep it secret.
 - The search URL ends up in browser history; revoke a token in Settings if it leaks.
 - Team join codes let anyone holding them join and edit team shortcuts; rotate them in Settings.

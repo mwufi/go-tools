@@ -1,3 +1,4 @@
+import { edgeChanged } from "./edge";
 import { v } from "convex/values";
 import { internalMutation, mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -115,6 +116,7 @@ export async function upsertLink(
       return { id: existing._id, created: false };
     await ctx.db.patch(existing._id, { url, emptyUrl, description, text, updatedAt: Date.now() });
     await writeRevision(ctx, (await ctx.db.get(existing._id))!, user?._id, "edit");
+    await edgeChanged(ctx, ["links", existing._id]);
     return { id: existing._id, created: false };
   }
   const id = await ctx.db.insert("links", {
@@ -129,6 +131,7 @@ export async function upsertLink(
     clicks: 0,
   });
   await writeRevision(ctx, (await ctx.db.get(id))!, user?._id, "create");
+  await edgeChanged(ctx, ["links", id]);
   return { id, created: true };
 }
 
@@ -157,6 +160,7 @@ export const save = mutation({
         await canEdit(ctx, user, prev, true);
         await writeRevision(ctx, prev, user._id, "delete");
         await ctx.db.delete(prev._id);
+        await edgeChanged(ctx, ["links", prev._id]);
       }
     }
     return await upsertLink(ctx, user, scope, args);
@@ -172,6 +176,7 @@ export const remove = mutation({
     await canEdit(ctx, user, link, true);
     await writeRevision(ctx, link, user._id, "delete");
     await ctx.db.delete(link._id);
+    await edgeChanged(ctx, ["links", link._id]);
   },
 });
 
@@ -191,6 +196,7 @@ export const revert = mutation({
       updatedAt: Date.now(),
     });
     await writeRevision(ctx, (await ctx.db.get(link._id))!, user._id, "revert");
+    await edgeChanged(ctx, ["links", link._id]);
   },
 });
 

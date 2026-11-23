@@ -9,5 +9,5 @@
     "lib": ["ES2022"],
     "types": ["@cloudflare/workers-types"]
   },
-  "include": ["src", "../edge", "../convex/lib/core.ts", "../convex/lib/go.ts", "../convex/lib/sha256.ts"]
+  "include": ["src", "../edge", "../convex/lib/core.ts", "../convex/lib/go.ts", "../convex/lib/sha256.ts", "../convex/lib/auth.ts", "../convex/lib/edgeRows.ts"]
 }

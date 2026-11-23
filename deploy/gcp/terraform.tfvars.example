@@ -8,3 +8,6 @@ regions = ["us-west2"]
 # Later, for a spread-out team:
 # regions = ["us-west2", "us-east1", "europe-west1"]
 # domain  = "go.example.com"
+
+# Same value as `npx convex env set EDGE_SYNC_SECRET ...`. This file is gitignored.
+edge_sync_secret = "change-me"

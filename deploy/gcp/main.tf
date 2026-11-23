@@ -49,6 +49,10 @@ resource "google_cloud_run_v2_service" "edge" {
         name  = "CONVEX_SITE"
         value = var.convex_site
       }
+      env {
+        name  = "EDGE_SYNC_SECRET"
+        value = var.edge_sync_secret
+      }
       resources {
         limits = {
           cpu    = "1"
