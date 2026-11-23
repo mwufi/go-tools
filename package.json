@@ -7,7 +7,8 @@
     "build": "node scripts/build-web.mjs",
     "dev:web": "vite",
     "deploy": "node scripts/build-web.mjs && npx convex deploy",
-    "typecheck": "tsc -p web/tsconfig.json && tsc -p convex/tsconfig.json"
+    "typecheck": "tsc -p web/tsconfig.json && tsc -p convex/tsconfig.json",
+    "deploy:dev": "node scripts/build-web.mjs && npx convex dev --once"
   },
   "author": "",
   "license": "ISC",

@@ -47,6 +47,10 @@ npx convex run seed:run                   # built-in shortcuts
 npm run deploy                            # builds the web app into convex/ and deploys
 ```
 
+With a dev deploy key (`CONVEX_DEPLOY_KEY=dev:...`), use `npm run deploy:dev` instead.
+The hosted instance currently runs on the dev deployment `tame-crow-881`
+(https://tame-crow-881.convex.site).
+
 Open `https://<deployment>.convex.site`, sign up with the invite code, and copy your
 search URL from the welcome page into your browser's search engine settings.
 
