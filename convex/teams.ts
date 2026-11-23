@@ -1,3 +1,4 @@
+import { edgeChanged } from "./edge";
 import { v } from "convex/values";
 import { action, internalMutation, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -39,6 +40,7 @@ export const insertTeam = internalMutation({
     const teamId = await ctx.db.insert("teams", { slug, name: args.name, vars: args.vars, joinCodeHash: args.joinCodeHash });
     await ctx.db.insert("members", { teamId, userId: user._id, role: "admin" });
     if (!user.primaryTeamId) await ctx.db.patch(user._id, { primaryTeamId: teamId });
+    await edgeChanged(ctx, ["teams", teamId], ["users", user._id]);
     return teamId;
   },
 });
@@ -74,6 +76,7 @@ export const join = mutation({
       .unique();
     if (!existing) await ctx.db.insert("members", { teamId: team._id, userId: user._id, role: "member" });
     if (!user.primaryTeamId) await ctx.db.patch(user._id, { primaryTeamId: team._id });
+    await edgeChanged(ctx, ["users", user._id]);
     return team.name;
   },
 });
@@ -85,6 +88,7 @@ export const leave = mutation({
     const m = await requireMember(ctx, user, args.teamId);
     await ctx.db.delete(m._id);
     if (user.primaryTeamId === args.teamId) await ctx.db.patch(user._id, { primaryTeamId: undefined });
+    await edgeChanged(ctx, ["users", user._id]);
   },
 });
 
@@ -100,6 +104,7 @@ export const setVars = mutation({
       if (val.trim()) vars[key] = val.trim();
     }
     await ctx.db.patch(args.teamId, { vars });
+    await edgeChanged(ctx, ["teams", args.teamId]);
   },
 });
 

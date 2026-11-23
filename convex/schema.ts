@@ -71,4 +71,12 @@ export default defineSchema({
     kept: v.boolean(),
     ms: v.number(),
   }).index("by_user_query", ["userId", "queryNorm"]),
+
+  // Numbered change feed for the edges (see edge.ts). row null = deleted.
+  edgeLog: defineTable({
+    seq: v.number(),
+    table: v.union(v.literal("links"), v.literal("users"), v.literal("tokens"), v.literal("teams"), v.literal("learned")),
+    id: v.string(),
+    row: v.any(),
+  }).index("by_seq", ["seq"]),
 });

@@ -1,3 +1,4 @@
+import { edgeChanged } from "./edge";
 import { v } from "convex/values";
 import { action, internalMutation, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -73,8 +74,9 @@ export const createUser = internalMutation({
       primaryTeamId: teamId,
     });
     if (teamId) await ctx.db.insert("members", { teamId, userId, role: "member" });
-    await ctx.db.insert("tokens", { userId, tokenHash: args.searchHash, kind: "search", label: "Browser", hint: args.searchHint });
-    await ctx.db.insert("tokens", { userId, tokenHash: args.apiHash, kind: "api", label: "Web app", hint: args.apiHint });
+    const t1 = await ctx.db.insert("tokens", { userId, tokenHash: args.searchHash, kind: "search", label: "Browser", hint: args.searchHint });
+    const t2 = await ctx.db.insert("tokens", { userId, tokenHash: args.apiHash, kind: "api", label: "Web app", hint: args.apiHint });
+    await edgeChanged(ctx, ["users", userId], ["tokens", t1], ["tokens", t2]);
   },
 });
 
@@ -133,6 +135,7 @@ export const updateSettings = mutation({
       throw new Error("Pick an engine, or give a URL with {*} where the query goes");
     if (patch.name !== undefined && !patch.name.trim()) throw new Error("Name can't be empty");
     await ctx.db.patch(user._id, patch);
+    await edgeChanged(ctx, ["users", user._id]);
   },
 });
 
@@ -156,7 +159,8 @@ export const storeToken = internalMutation({
   args: { token: v.string(), kind: v.union(v.literal("search"), v.literal("api")), label: v.string(), hash: v.string(), hint: v.string() },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx, args.token);
-    await ctx.db.insert("tokens", { userId: user._id, tokenHash: args.hash, kind: args.kind, label: args.label, hint: args.hint });
+    const id = await ctx.db.insert("tokens", { userId: user._id, tokenHash: args.hash, kind: args.kind, label: args.label, hint: args.hint });
+    await edgeChanged(ctx, ["tokens", id]);
   },
 });
 
@@ -168,5 +172,6 @@ export const revokeToken = mutation({
     if (!row || row.userId !== user._id) throw new Error("Not your token");
     if (row.tokenHash === hashToken(args.token)) throw new Error("That's the token this page is using");
     await ctx.db.delete(args.tokenId);
+    await edgeChanged(ctx, ["tokens", args.tokenId]);
   },
 });

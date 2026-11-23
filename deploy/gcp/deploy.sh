@@ -16,4 +16,7 @@ terraform apply -input=false -auto-approve -target=google_artifact_registry_repo
 terraform apply -input=false -auto-approve -var "image=$REPO/edge:$TAG"
 EDGE=$(terraform output -raw edge_url)
 (cd ../.. && npx convex env set GO_EDGE_URL "$EDGE")
+# Push changes to every regional service (add your Worker URL here too if you run both).
+URLS=$(terraform output -json edge_urls | python3 -c 'import json,sys;print(",".join(json.load(sys.stdin).values()))')
+(cd ../.. && npx convex env set EDGE_SYNC_URLS "$URLS")
 echo "Edge is live at $EDGE. New search URL: $EDGE/s?q=%s&t=<your search token> (Settings shows it)."

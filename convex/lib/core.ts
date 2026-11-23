@@ -56,27 +56,3 @@ export async function resolveWith(src: Source, q: string, llmAvailable: boolean)
   if (parsed.explicit && parsed.words.length === 1) return { kind: "create", keyword: parsed.lower[0] };
   return { kind: "search", url: searchUrl(user?.fallbackSearch ?? "google", parsed.raw) };
 }
-
-/** Everything a user's queries can resolve to, for caching at the edge. */
-export type Snapshot = {
-  v: 1;
-  at: number;
-  llm: boolean;
-  user: UserLite | null;
-  scopes: string[];
-  teams: Record<string, Vars>;
-  links: LinkLite[];
-  learned: Record<string, string>;
-};
-
-export function snapshotSource(s: Snapshot): Source {
-  const byKey = new Map<string, LinkLite>();
-  for (const l of s.links) byKey.set(`${l.scopeId}\u0000${l.keyword}`, l);
-  return {
-    user: s.user,
-    scopes: s.scopes,
-    teamVars: (id) => s.teams[id] ?? {},
-    link: (scopeId, keyword) => byKey.get(`${scopeId}\u0000${keyword}`) ?? null,
-    learned: (qn) => s.learned[qn] ?? null,
-  };
-}

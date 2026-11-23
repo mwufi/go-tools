@@ -1,28 +1,25 @@
 // go-tools edge Worker (Cloudflare). All logic lives in edge/handler.ts;
-// this adds the colo cache as a second tier and waitUntil for background work.
-import { handle, type Entry } from "../../edge/handler";
+// shortcuts live in D1, which Convex keeps current by push.
+import { handle } from "../../edge/handler";
+import { D1Store } from "./d1";
 
 interface Env {
   CONVEX_SITE: string;
+  EDGE_SYNC_SECRET?: string;
+  DB: D1Database;
 }
 
-const CACHE_HOST = "https://go-snapshot.internal/";
+let store: D1Store | undefined;
 
 export default {
   fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    store ??= new D1Store(env.DB);
     return handle(req, {
       convexSite: env.CONVEX_SITE,
+      syncSecret: env.EDGE_SYNC_SECRET,
+      store,
+      checkEveryMs: 5 * 60_000, // pushes keep D1 current; this only catches a missed one
       background: (p) => ctx.waitUntil(p),
-      async getShared(key) {
-        const r = await caches.default.match(CACHE_HOST + key);
-        return r ? ((await r.json()) as Entry) : null;
-      },
-      async putShared(key, e) {
-        await caches.default.put(
-          CACHE_HOST + key,
-          new Response(JSON.stringify(e), { headers: { "content-type": "application/json", "cache-control": "max-age=2592000" } }),
-        );
-      },
     });
   },
 } satisfies ExportedHandler<Env>;

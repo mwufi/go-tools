@@ -8,10 +8,12 @@
  * @module
  */
 
+import type * as edge from "../edge.js";
 import type * as http from "../http.js";
 import type * as lib_assets from "../lib/assets.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_core from "../lib/core.js";
+import type * as lib_edgeRows from "../lib/edgeRows.js";
 import type * as lib_go from "../lib/go.js";
 import type * as lib_random from "../lib/random.js";
 import type * as lib_recipes from "../lib/recipes.js";
@@ -30,10 +32,12 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  edge: typeof edge;
   http: typeof http;
   "lib/assets": typeof lib_assets;
   "lib/auth": typeof lib_auth;
   "lib/core": typeof lib_core;
+  "lib/edgeRows": typeof lib_edgeRows;
   "lib/go": typeof lib_go;
   "lib/random": typeof lib_random;
   "lib/recipes": typeof lib_recipes;

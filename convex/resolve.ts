@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { internalQuery, query, type QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { userByHash, teamIdsFor, hashToken } from "./lib/auth";
-import { resolveWith, type LinkLite, type Snapshot, type Source, type UserLite } from "./lib/core";
+import { resolveWith, type LinkLite, type Source, type UserLite } from "./lib/core";
 
 export type { Resolution } from "./lib/core";
 
@@ -47,28 +47,6 @@ const toLinkLite = (l: Doc<"links">): LinkLite => ({
 async function resolveImpl(ctx: QueryCtx, tokenHash: string | undefined, q: string, llmAvailable: boolean) {
   return await resolveWith(await sourceFor(ctx, tokenHash), q, llmAvailable);
 }
-
-/** Everything one token's queries can resolve to, for the edge Worker's cache. */
-export const snapshot = internalQuery({
-  args: { tokenHash: v.optional(v.string()), llm: v.boolean() },
-  handler: async (ctx, args): Promise<Snapshot> => {
-    const user = await userByHash(ctx, args.tokenHash);
-    const teamIds = user ? await teamIdsFor(ctx, user) : [];
-    const scopes = [...(user ? [user._id as string] : []), ...teamIds.map(String), "global"];
-    const links: LinkLite[] = [];
-    for (const s of scopes) {
-      for (const l of await ctx.db.query("links").withIndex("by_scope_keyword", (x) => x.eq("scopeId", s)).collect()) links.push(toLinkLite(l));
-    }
-    const teams: Record<string, Record<string, string>> = {};
-    for (const id of teamIds) teams[id] = (await ctx.db.get(id))?.vars ?? {};
-    const learned: Record<string, string> = {};
-    if (user) {
-      const rows = await ctx.db.query("learned").withIndex("by_user_query", (x) => x.eq("userId", user._id)).collect();
-      for (const r of rows) if (r.kept) learned[r.queryNorm] = r.url; // ascending, so the newest wins
-    }
-    return { v: 1, at: Date.now(), llm: args.llm, user: user ? toUserLite(user) : null, scopes, teams, links, learned };
-  },
-});
 
 export const resolve = internalQuery({
   args: { tokenHash: v.optional(v.string()), q: v.string(), llmAvailable: v.boolean() },

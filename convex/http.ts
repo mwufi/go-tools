@@ -3,6 +3,7 @@ import { httpAction } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { hashToken } from "./lib/auth";
+import { sha256Hex } from "./lib/sha256";
 import { llmAvailable, think } from "./llm";
 import { APP_HTML, THINK_HTML } from "./lib/assets";
 
@@ -91,14 +92,26 @@ http.route({
 
 // Snapshot for the edge Worker: everything this token's queries can resolve to.
 // Readable with the same search token the browser already sends.
+// Change feed for the edges (see edge.ts). Needs EDGE_SYNC_SECRET.
+function edgeAuthorized(req: Request) {
+  const secret = process.env.EDGE_SYNC_SECRET;
+  return !!secret && sha256Hex(req.headers.get("authorization") ?? "") === sha256Hex(`Bearer ${secret}`);
+}
 http.route({
-  path: "/api/snapshot",
+  path: "/api/edge/changes",
   method: "GET",
   handler: httpAction(async (ctx, req) => {
-    const t = new URL(req.url).searchParams.get("t");
-    const snap = await ctx.runQuery(internal.resolve.snapshot, { tokenHash: t ? hashToken(t) : undefined, llm: llmAvailable() });
-    if (t && !snap.user) return json({ error: "unknown token" }, 404);
-    return json(snap);
+    if (!edgeAuthorized(req)) return json({ error: "forbidden" }, 403);
+    const after = Number(new URL(req.url).searchParams.get("after") ?? 0) || 0;
+    return json(await ctx.runQuery(internal.edge.changes, { after }));
+  }),
+});
+http.route({
+  path: "/api/edge/dump",
+  method: "GET",
+  handler: httpAction(async (ctx, req) => {
+    if (!edgeAuthorized(req)) return json({ error: "forbidden" }, 403);
+    return json(await ctx.runQuery(internal.edge.dump, {}));
   }),
 });
 
