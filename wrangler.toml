@@ -11,7 +11,7 @@ CONVEX_SITE = "https://tame-crow-881.convex.site"
 [[d1_databases]]
 binding = "DB"
 database_name = "go-tools"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "82e5c34e-95eb-401f-9201-cdc0d10bebd0"
 
 # Also set the shared secret (same value as EDGE_SYNC_SECRET on Convex):
 #   npx wrangler secret put EDGE_SYNC_SECRET
