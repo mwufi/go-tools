@@ -27,6 +27,9 @@ export default defineSchema({
     name: v.string(),
     vars: v.record(v.string(), v.string()),
     joinCodeHash: v.string(),
+    about: v.optional(v.string()),
+    avatarId: v.optional(v.id("_storage")),
+    headerId: v.optional(v.id("_storage")),
   }).index("by_slug", ["slug"]).index("by_join", ["joinCodeHash"]),
 
   members: defineTable({

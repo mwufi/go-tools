@@ -9,6 +9,7 @@ import { Editor } from "./pages/Editor";
 import { Info } from "./pages/Info";
 import { Settings } from "./pages/Settings";
 import { Welcome } from "./pages/Welcome";
+import { Team } from "./pages/Team";
 
 export function App() {
   const session = useSession();
@@ -23,6 +24,7 @@ export function App() {
   else if (path.startsWith("/i/")) page = <Info keyword={decodeURIComponent(path.slice(3))} />;
   else if (path === "/settings") page = <Settings />;
   else if (path === "/welcome") page = <Welcome />;
+  else if (path.startsWith("/team/")) page = <Team slug={decodeURIComponent(path.slice(6))} />;
   else page = <NotFound />;
 
   return (
