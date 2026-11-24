@@ -3,12 +3,14 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import { useSession } from "../store";
-import { navigate, useLocation } from "../router";
+import { linkProps, navigate, useLocation } from "../router";
+import { keywordFrom } from "../importParse";
+import { normalizeKeyword } from "../../../convex/lib/go";
 import { Arrow, errText } from "../ui";
 
 type Initial = Partial<Pick<Doc<"links">, "keyword" | "url" | "description" | "emptyUrl" | "scope" | "scopeId" | "_id">>;
 
-export function LinkForm({ initial, onDone }: { initial: Initial; onDone?: (keyword: string) => void }) {
+export function LinkForm({ initial, onDone, selectKeyword }: { initial: Initial; onDone?: (keyword: string) => void; selectKeyword?: boolean }) {
   const session = useSession()!;
   const me = useQuery(api.users.me, { token: session.apiToken });
   const save = useMutation(api.links.save);
@@ -49,7 +51,7 @@ export function LinkForm({ initial, onDone }: { initial: Initial; onDone?: (keyw
     <form className="form-grid" onSubmit={submit} style={{ gap: 26 }}>
       <label className="kw-hero">
         <span className="go">go/</span>
-        <input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="keyword" autoFocus={!initial.keyword} spellCheck={false} autoComplete="off" aria-label="Keyword" />
+        <input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="keyword" autoFocus={!initial.keyword || selectKeyword} onFocus={selectKeyword ? (e) => e.currentTarget.select() : undefined} spellCheck={false} autoComplete="off" aria-label="Keyword" />
       </label>
       <label className="field">
         <span>Goes to</span>
@@ -89,10 +91,29 @@ export function LinkForm({ initial, onDone }: { initial: Initial; onDone?: (keyw
 
 export function Editor() {
   const { params } = useLocation();
+  const session = useSession()!;
+  const k = params.get("k") ?? "";
+  const u = params.get("u") ?? "";
+  const d = params.get("d") ?? "";
+  const team = params.get("team");
+  // From the bookmarklet: no keyword yet, so offer one from the page title.
+  const keyword = k || (u ? keywordFrom(d, u) : "");
+  const near = useQuery(api.activity.nearby, k ? { token: session.apiToken, q: k } : "skip");
   return (
     <div className="fade-in" style={{ marginTop: 48, maxWidth: 680 }}>
       <div className="eyebrow" style={{ marginBottom: 20 }}>New shortcut</div>
-      <LinkForm initial={{ keyword: params.get("k") ?? "", url: params.get("u") ?? "", description: params.get("d") ?? "" }} />
+      {near && near.length > 0 && (
+        <div className="banner" style={{ marginTop: 0, marginBottom: 28 }}>
+          <span className="grow">No <code>go/{normalizeKeyword(k)}</code> yet. Did you mean {near.map((n, i) => (
+            <span key={n}>{i > 0 && " or "}<a {...linkProps(`/i/${encodeURIComponent(n)}`)}><code>go/{n}</code></a></span>
+          ))}?</span>
+        </div>
+      )}
+      <LinkForm
+        key={`${k}|${u}|${team}`}
+        initial={{ keyword, url: u, description: d.slice(0, 200), ...(team ? { scope: "team" as const, scopeId: team } : {}) }}
+        selectKeyword={!k && !!keyword}
+      />
     </div>
   );
 }

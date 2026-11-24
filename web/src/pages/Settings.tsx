@@ -4,8 +4,10 @@ import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { setSession, useSession } from "../store";
 import { linkProps, navigate } from "../router";
-import { CopyField, errText, useToast } from "../ui";
+import { CopyField, errText, inviteLink, useToast } from "../ui";
 import { BrowserSetup } from "./BrowserSetup";
+import { Bookmarklet } from "./Bookmarklet";
+import { Importer, MissTracking, OtherDevice } from "./SettingsExtras";
 
 export function VarsEditor({ value, onSave, suggestions }: { value: Record<string, string>; onSave: (v: Record<string, string>) => Promise<void>; suggestions: string[] }) {
   const [pairs, setPairs] = useState<[string, string][]>(() => {
@@ -68,7 +70,7 @@ function TeamCard({ team }: { team: { _id: Id<"teams">; name: string; slug: stri
         {team.role === "admin" && <button className="btn small" onClick={async () => setCode(await rotate({ token: session.apiToken, teamId: team._id }))}>New invite code</button>}
         <button className="btn small ghost danger" onClick={() => leave({ token: session.apiToken, teamId: team._id })}>Leave team</button>
       </div>
-      {code && <div style={{ marginTop: 12 }}><CopyField value={code} /><p className="hint">Anyone with this code can join and edit team shortcuts. Old codes stop working.</p></div>}
+      {code && <div style={{ marginTop: 12 }}><CopyField value={inviteLink(code)} label="Copy link" /><p className="hint">Send this link: it signs people up and adds them to {team.name} in one step. Anyone with it can join and edit team shortcuts. Old links stop working.</p></div>}
     </div>
   );
 }
@@ -98,7 +100,7 @@ export function Settings() {
   return (
     <div className="settings fade-in">
       <aside>
-        {[["browser", "Browser"], ["variables", "Variables"], ["search", "Web search"], ["llm", "Plain-words queries"], ["teams", "Teams"], ["tokens", "Tokens"]].map(([id, label]) => (
+        {[["browser", "Browser"], ["save", "Save pages"], ["import", "Import"], ["variables", "Variables"], ["search", "Web search"], ["llm", "Plain-words queries"], ["teams", "Teams"], ["devices", "Other devices"], ["tokens", "Tokens"]].map(([id, label]) => (
           <a key={id} href={`#${id}`}>{label}</a>
         ))}
       </aside>
@@ -107,6 +109,18 @@ export function Settings() {
           <h2>Browser</h2>
           <p>Make this your default search engine. Shortcuts redirect at once, everything else goes to your web search.</p>
           <BrowserSetup />
+        </section>
+
+        <section id="save">
+          <h2>Save pages</h2>
+          <p>Make a shortcut for whatever page you're on, in two clicks.</p>
+          <Bookmarklet />
+        </section>
+
+        <section id="import">
+          <h2>Import</h2>
+          <p>Bring in your browser bookmarks or a CSV, pick the ones you want, and they become shortcuts. Nothing you already have gets overwritten.</p>
+          <Importer />
         </section>
 
         <section id="variables">
@@ -144,6 +158,12 @@ export function Settings() {
           </div>
         </section>
 
+        <section id="suggestions">
+          <h2>Suggestions</h2>
+          <p>When you keep searching for the same thing, go offers to turn it into a shortcut.</p>
+          <div className="form-grid"><MissTracking Toggle={Toggle} /></div>
+        </section>
+
         <section id="teams">
           <h2>Teams</h2>
           <p>Team shortcuts are shared with everyone on the team. Anyone can add or fix one; history keeps every version.</p>
@@ -158,7 +178,13 @@ export function Settings() {
               <div style={{ display: "flex", gap: 8 }}><input className="input mono" value={joinCode} onChange={(e) => setJoinCode(e.target.value)} placeholder="team-…" required /><button className="btn">Join</button></div>
             </form>
           </div>
-          {newCode && <div style={{ marginTop: 14 }}><p className="hint">Share this code to invite people. It's shown once.</p><CopyField value={newCode} /></div>}
+          {newCode && <div style={{ marginTop: 14 }}><p className="hint">Send this invite link to your teammates. It signs them up and adds them to the team. It's shown once; make a new one from the team any time.</p><CopyField value={inviteLink(newCode)} label="Copy link" /></div>}
+        </section>
+
+        <section id="devices">
+          <h2>Other devices</h2>
+          <p>Sign in on a new laptop or phone without copying tokens around.</p>
+          <OtherDevice />
         </section>
 
         <section id="tokens" style={{ borderBottom: 0 }}>
