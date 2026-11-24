@@ -3,11 +3,11 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { setSession, useSession } from "../store";
-import { navigate } from "../router";
+import { linkProps, navigate } from "../router";
 import { CopyField, errText, useToast } from "../ui";
 import { BrowserSetup } from "./BrowserSetup";
 
-function VarsEditor({ value, onSave, suggestions }: { value: Record<string, string>; onSave: (v: Record<string, string>) => Promise<void>; suggestions: string[] }) {
+export function VarsEditor({ value, onSave, suggestions }: { value: Record<string, string>; onSave: (v: Record<string, string>) => Promise<void>; suggestions: string[] }) {
   const [pairs, setPairs] = useState<[string, string][]>(() => {
     const p = Object.entries(value);
     return p.length ? p : [[suggestions[0] ?? "", ""]];
@@ -45,7 +45,7 @@ function Toggle({ checked, onChange, title, children }: { checked: boolean; onCh
   );
 }
 
-function TeamCard({ team }: { team: { _id: Id<"teams">; name: string; slug: string; vars: Record<string, string>; role: string } }) {
+function TeamCard({ team }: { team: { _id: Id<"teams">; name: string; slug: string; vars: Record<string, string>; role: string; avatarUrl: string | null } }) {
   const session = useSession()!;
   const members = useQuery(api.teams.members, { token: session.apiToken, teamId: team._id });
   const setVars = useMutation(api.teams.setVars);
@@ -54,11 +54,13 @@ function TeamCard({ team }: { team: { _id: Id<"teams">; name: string; slug: stri
   const [code, setCode] = useState<string | null>(null);
   return (
     <div className="card" style={{ marginBottom: 14 }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        {team.avatarUrl ? <img className="mini-avatar" src={team.avatarUrl} alt="" /> : <span className="monogram" style={{ width: 36, height: 36, fontSize: 18 }} aria-hidden>{team.name[0]?.toUpperCase()}</span>}
         <div className="serif" style={{ fontSize: 26 }}>{team.name}</div>
         <span className="chip">{team.role}</span>
         <span style={{ flex: 1 }} />
-        <span className="hint">{members?.map((m) => m.name).join(", ")}</span>
+        <span className="hint">{members?.length ?? ""} {members?.length === 1 ? "member" : "members"}</span>
+        <a className="btn small" {...linkProps(`/team/${team.slug}`)}>Open team page</a>
       </div>
       <div className="eyebrow" style={{ margin: "20px 0 10px" }}>Team variables</div>
       <VarsEditor value={team.vars} suggestions={["github_org", "linear", "slack"]} onSave={async (vars) => { await setVars({ token: session.apiToken, teamId: team._id, vars }); }} />

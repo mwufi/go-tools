@@ -54,15 +54,13 @@ export const createUser = internalMutation({
   handler: async (ctx, args) => {
     const name = args.name.trim();
     if (!name) throw new Error("Tell us your name");
-    let teamId: Id<"teams"> | undefined;
-    if (!args.inviteOk) {
-      const code = args.code?.trim() ?? "";
-      const team = code
-        ? await ctx.db.query("teams").withIndex("by_join", (q) => q.eq("joinCodeHash", sha256Hex("join:" + code))).unique()
-        : null;
-      if (!team) throw new Error("That invite code doesn't work");
-      teamId = team._id;
-    }
+    // A team join code works as an invite and also puts you on that team.
+    const code = args.code?.trim() ?? "";
+    const team = code
+      ? await ctx.db.query("teams").withIndex("by_join", (q) => q.eq("joinCodeHash", sha256Hex("join:" + code))).unique()
+      : null;
+    if (!args.inviteOk && !team) throw new Error("That invite code doesn't work");
+    const teamId: Id<"teams"> | undefined = team?._id;
     const vars: Record<string, string> = {};
     if (args.github?.trim()) vars.github = args.github.trim().replace(/^@/, "");
     const userId = await ctx.db.insert("users", {
@@ -97,7 +95,11 @@ export const me = query({
         .query("members")
         .withIndex("by_team_user", (q) => q.eq("teamId", id).eq("userId", user._id))
         .unique();
-      if (t) teams.push({ _id: t._id, slug: t.slug, name: t.name, vars: t.vars, role: m?.role ?? "member" });
+      if (t)
+        teams.push({
+          _id: t._id, slug: t.slug, name: t.name, vars: t.vars, role: m?.role ?? "member",
+          avatarUrl: t.avatarId ? await ctx.storage.getUrl(t.avatarId) : null,
+        });
     }
     const tokens = (
       await ctx.db.query("tokens").withIndex("by_user", (q) => q.eq("userId", user._id)).collect()
