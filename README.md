@@ -30,6 +30,7 @@ same deployment (`convex/lib/assets.ts` is generated), so there is nothing else 
 | `GET /s?q=&t=` | resolve and redirect (the search-engine URL) |
 | `GET /suggest?q=&t=` | OpenSearch suggestions for the address bar |
 | `GET /think`, `POST /api/think` | thinking page and the LLM call |
+| `POST /api/seen` | what a search reports back (misses, sampled hits, a daily check-in); see `convex/lib/activity.ts` |
 | `GET/POST/DELETE /api/links`, `GET /api/resolve` | JSON API for the CLI and agents (`Authorization: Bearer <api token>`) |
 | everything else | the web app |
 

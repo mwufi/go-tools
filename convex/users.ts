@@ -4,7 +4,7 @@ import { action, internalMutation, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { hashToken, requireUser, teamIdsFor } from "./lib/auth";
-import { newToken } from "./lib/random";
+import { newToken, randomString } from "./lib/random";
 import { SEARCH_ENGINES } from "./lib/go";
 import { sha256Hex } from "./lib/sha256";
 
@@ -175,5 +175,58 @@ export const revokeToken = mutation({
     if (row.tokenHash === hashToken(args.token)) throw new Error("That's the token this page is using");
     await ctx.db.delete(args.tokenId);
     await edgeChanged(ctx, ["tokens", args.tokenId]);
+  },
+});
+
+// ---------------------------------------------------------------- sign in on another device
+const LOGIN_TTL = 10 * 60_000;
+const loginHash = (code: string) => sha256Hex("login:" + code.trim().replace(/[\s-]/g, "").toUpperCase());
+
+/** A one-time code (and link) that signs this person in on another device. Lasts 10 minutes. */
+export const createLoginCode = action({
+  args: { token: v.string() },
+  handler: async (ctx, args): Promise<{ code: string; expiresAt: number }> => {
+    const raw = randomString(8).toUpperCase();
+    const code = `${raw.slice(0, 4)}-${raw.slice(4)}`;
+    const expiresAt = Date.now() + LOGIN_TTL;
+    await ctx.runMutation(internal.users.storeLoginCode, { token: args.token, codeHash: loginHash(code), expiresAt });
+    return { code, expiresAt };
+  },
+});
+
+export const storeLoginCode = internalMutation({
+  args: { token: v.string(), codeHash: v.string(), expiresAt: v.number() },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx, args.token);
+    await ctx.db.insert("loginCodes", { userId: user._id, codeHash: args.codeHash, expiresAt: args.expiresAt });
+  },
+});
+
+/** Trade a sign-in code for fresh tokens on this device. The code stops working. */
+export const redeemLoginCode = action({
+  args: { code: v.string() },
+  handler: async (ctx, args): Promise<{ searchToken: string; apiToken: string }> => {
+    const searchToken = newToken("search");
+    const apiToken = newToken("api");
+    await ctx.runMutation(internal.users.useLoginCode, {
+      codeHash: loginHash(args.code),
+      searchHash: hashToken(searchToken),
+      apiHash: hashToken(apiToken),
+      searchHint: searchToken.slice(-4),
+      apiHint: apiToken.slice(-4),
+    });
+    return { searchToken, apiToken };
+  },
+});
+
+export const useLoginCode = internalMutation({
+  args: { codeHash: v.string(), searchHash: v.string(), apiHash: v.string(), searchHint: v.string(), apiHint: v.string() },
+  handler: async (ctx, args) => {
+    const row = await ctx.db.query("loginCodes").withIndex("by_hash", (q) => q.eq("codeHash", args.codeHash)).unique();
+    if (!row || row.expiresAt < Date.now()) throw new Error("That sign-in code doesn't work or has expired. Make a new one in Settings on your other device.");
+    await ctx.db.delete(row._id);
+    const t1 = await ctx.db.insert("tokens", { userId: row.userId, tokenHash: args.searchHash, kind: "search", label: "Browser (signed in with a code)", hint: args.searchHint });
+    const t2 = await ctx.db.insert("tokens", { userId: row.userId, tokenHash: args.apiHash, kind: "api", label: "Web app (signed in with a code)", hint: args.apiHint });
+    await edgeChanged(ctx, ["tokens", t1], ["tokens", t2]);
   },
 });

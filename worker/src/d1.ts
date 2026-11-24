@@ -4,6 +4,7 @@
 import type { LinkLite } from "../../convex/lib/core";
 import type { Change, Dump, EdgeTable, EdgeTeam, EdgeUser } from "../../convex/lib/edgeRows";
 import { sourceFrom, type Lookup, type Store } from "../../edge/store";
+import { didYouMean } from "../../convex/lib/fuzzy";
 
 const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)",
@@ -123,6 +124,12 @@ export class D1Store implements Store {
       .prepare(`SELECT DISTINCT keyword FROM links WHERE keyword >= ?2 AND keyword < ?3 AND ${IN_SCOPE} ORDER BY keyword LIMIT 8`)
       .bind(tokenHash ?? "", prefix, prefix + "￿")
       .all<{ keyword: string }>();
-    return r.results.map((x) => x.keyword);
+    if (r.results.length || prefix.length < 4) return r.results.map((x) => x.keyword);
+    // Nothing starts with it: offer keywords a typo away ("revews" -> reviews).
+    const near = await this.db
+      .prepare(`SELECT DISTINCT keyword FROM links WHERE length(keyword) BETWEEN ?2 AND ?3 AND ${IN_SCOPE} LIMIT 2000`)
+      .bind(tokenHash ?? "", prefix.length - 2, prefix.length + 2)
+      .all<{ keyword: string }>();
+    return didYouMean(prefix, near.results.map((x) => x.keyword));
   }
 }
