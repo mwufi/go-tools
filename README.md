@@ -68,6 +68,8 @@ List both URLs in `EDGE_SYNC_URLS` to run them side by side.
 
 ## Setup
 
+Full checklist of credentials, env vars and commands: [DEVELOPING.md](DEVELOPING.md).
+
 ```bash
 npm install
 npx convex deploy                         # first time: creates/links the deployment
