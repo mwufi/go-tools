@@ -120,6 +120,26 @@ export function fillTemplate(template: string, args: string[], vars: Vars): stri
   return missing ? null : out;
 }
 
+/**
+ * How many trailing words a template can absorb: Infinity for {*} or %s,
+ * otherwise the highest {n} it uses (0 for a plain URL).
+ */
+export function maxArgs(template: string): number {
+  if (/\{\*\}|%s/.test(template)) return Infinity;
+  let max = 0;
+  for (const m of template.matchAll(/\{(\d+)\}/g)) max = Math.max(max, Number(m[1]));
+  return max;
+}
+
+/**
+ * Whether a shortcut should handle a query with these extra words. Extra words
+ * a template has no slot for ("convex components" against a plain go/convex)
+ * mean the person is searching, not using the shortcut.
+ */
+export function argsFit(template: string, args: string[]): boolean {
+  return args.length <= maxArgs(template);
+}
+
 export function needsArgs(template: string): boolean {
   return /\{(\*|\d+)\}|%s/.test(template);
 }
