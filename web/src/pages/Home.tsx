@@ -5,6 +5,7 @@ import { LLM_AVAILABLE, SEARCH_BASE } from "../config";
 import { useSession } from "../store";
 import { linkProps } from "../router";
 import { Arrow, IllusSignpost, ScopeChip, hostOf } from "../ui";
+import { Nudges, WeekLine } from "./Nudges";
 
 const RANK: Record<string, number> = { user: 0, team: 1, global: 2 };
 
@@ -12,6 +13,8 @@ function CommandBar() {
   const session = useSession()!;
   const [q, setQ] = useState("");
   const r = useQuery(api.resolve.preview, q.trim() ? { token: session.apiToken, q, llmAvailable: LLM_AVAILABLE } : "skip");
+  const missed = r && (r.kind === "search" || r.kind === "create") && q.trim().split(/\s+/).length <= 3;
+  const near = useQuery(api.activity.nearby, missed ? { token: session.apiToken, q } : "skip");
   const go = () => {
     if (!q.trim()) return;
     const t = session.searchToken ?? session.apiToken;
@@ -31,6 +34,14 @@ function CommandBar() {
     else if (r.kind === "think") dest = (<><Arrow /><span>Ask the model where <i>“{r.q}”</i> should go</span></>);
     else if (r.kind === "create") dest = (<><Arrow /><span>No <code>go/{r.keyword}</code> yet: create it</span></>);
     else if (r.kind === "info") dest = (<><Arrow /><span><code>go/{r.keyword}</code> needs more words after it</span></>);
+    if (near?.length && (r.kind === "search" || r.kind === "create"))
+      dest = (
+        <>
+          {dest}
+          <span className="faint" style={{ flex: "none" }}>· did you mean</span>
+          {near.map((k) => <a key={k} className="chip" style={{ flex: "none", cursor: "pointer" }} onClick={() => setQ(k)}>go/{k}</a>)}
+        </>
+      );
   }
   return (
     <div className="fade-in d1">
@@ -72,6 +83,8 @@ export function Home() {
     <div style={{ marginTop: 40 }}>
       <h1 className="title fade-in" style={{ marginBottom: 28 }}>Where <em>to</em>?</h1>
       <CommandBar />
+      <WeekLine />
+      <Nudges links={links} myId={me?._id} />
 
       <div className="toolbar">
         <div className="seg">

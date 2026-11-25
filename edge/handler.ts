@@ -7,6 +7,7 @@
 import { resolveWith } from "../convex/lib/core";
 import { candidates, normalizeQuery, parseQuery } from "../convex/lib/go";
 import { hashToken } from "../convex/lib/auth";
+import { reportFor } from "../convex/lib/activity";
 import type { ChangesPage, Dump } from "../convex/lib/edgeRows";
 import type { Store } from "./store";
 
@@ -97,11 +98,12 @@ export async function handle(req: Request, p: Platform): Promise<Response> {
     const r = await resolveWith(found.src, q, found.llm && !url.searchParams.has("nollm"));
     const timing = `edge;dur=${Date.now() - started}`;
     const tq = t ? `&t=${encodeURIComponent(t)}` : "";
+    // Misses, 1 in 10 hits and a daily check-in go back to Convex after we answer (lib/activity.ts).
+    const linkId = r.kind === "redirect" ? r.linkId : undefined;
+    const rep = t ? reportFor(tokenHash, q, r.kind, !!linkId) : null;
+    if (rep) p.background(fetch(`${p.convexSite}/api/seen`, { method: "POST", body: JSON.stringify({ t, ...rep, linkId }) }).catch(() => undefined));
     switch (r.kind) {
       case "redirect":
-        if (r.linkId && t && Math.random() < 0.1) {
-          p.background(fetch(`${p.convexSite}/api/click`, { method: "POST", body: JSON.stringify({ t, linkId: r.linkId, by: 10 }) }));
-        }
         return redirect(r.url, timing);
       case "search":
         return redirect(r.url, timing);

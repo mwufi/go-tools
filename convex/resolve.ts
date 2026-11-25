@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internalQuery, query, type QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { userByHash, teamIdsFor, hashToken } from "./lib/auth";
+import { didYouMean } from "./lib/fuzzy";
 import { resolveWith, type LinkLite, type Source, type UserLite } from "./lib/core";
 
 export type { Resolution } from "./lib/core";
@@ -76,6 +77,14 @@ export const suggest = internalQuery({
         .withIndex("by_scope_keyword", (x) => x.eq("scopeId", s).gte("keyword", prefix).lt("keyword", prefix + "￿"))
         .take(6);
       for (const r of rows) if (!seen.has(r.keyword)) seen.set(r.keyword, { keyword: r.keyword, description: r.description });
+    }
+    if (!seen.size && prefix.length >= 4) {
+      // Nothing starts with it: offer keywords a typo away ("revews" -> reviews).
+      const all = new Map<string, string>();
+      for (const s of scopes)
+        for (const r of await ctx.db.query("links").withIndex("by_scope_keyword", (x) => x.eq("scopeId", s)).collect())
+          if (!all.has(r.keyword)) all.set(r.keyword, r.description);
+      return didYouMean(prefix, all.keys()).map((keyword) => ({ keyword, description: `Did you mean go/${keyword}? ${all.get(keyword) ?? ""}`.trim() }));
     }
     return [...seen.values()].slice(0, 8);
   },

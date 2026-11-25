@@ -4,6 +4,7 @@ import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { hashToken } from "./lib/auth";
 import { sha256Hex } from "./lib/sha256";
+import { reportFor } from "./lib/activity";
 import { llmAvailable, think } from "./llm";
 import { APP_HTML, THINK_HTML } from "./lib/assets";
 
@@ -35,11 +36,15 @@ http.route({
     const noLlm = u.searchParams.has("nollm"); // "search instead" link on the thinking page
     const r = await ctx.runQuery(internal.resolve.resolve, { tokenHash, q, llmAvailable: llmAvailable() && !noLlm });
     const site = u.origin;
+    // Scheduling a write costs ~13 ms, so only some searches pay it: misses worth
+    // suggesting a shortcut for, 1 in 10 hits (counted as 10), and the first
+    // search from a token each day. See lib/activity.ts.
+    const linkId = r.kind === "redirect" ? r.linkId : undefined;
+    const rep = reportFor(tokenHash ?? null, q, r.kind, !!linkId);
+    if (rep && tokenHash) await ctx.scheduler.runAfter(0, internal.activity.record, { tokenHash, ...rep, linkId });
+    else if (!tokenHash && linkId && Math.random() < 0.1) await ctx.scheduler.runAfter(0, internal.links.bump, { linkId: linkId as Id<"links">, by: 10 });
     switch (r.kind) {
       case "redirect":
-        // Scheduling the click-count write costs ~13 ms, so only 1 in 10 redirects
-        // pays it and counts for 10. Counts are approximate; redirects stay fast.
-        if (r.linkId && Math.random() < 0.1) await ctx.scheduler.runAfter(0, internal.links.bump, { linkId: r.linkId as Id<"links">, by: 10 });
         return redirect(r.url);
       case "search":
         return redirect(r.url);
@@ -115,14 +120,29 @@ http.route({
   }),
 });
 
-// Sampled click counts reported by the edge Worker (off its hot path).
+// Sampled click counts reported by older edges (off their hot path).
 http.route({
   path: "/api/click",
   method: "POST",
   handler: httpAction(async (ctx, req) => {
     const b = (await req.json().catch(() => ({}))) as { t?: string; linkId?: string; by?: number };
     if (!b.t || !b.linkId) return json({ error: "t and linkId are required" }, 400);
-    await ctx.runMutation(internal.links.bumpFromEdge, { tokenHash: hashToken(b.t), linkId: b.linkId, by: Math.min(Math.max(b.by ?? 1, 1), 10) });
+    await ctx.runMutation(internal.activity.record, { tokenHash: hashToken(b.t), kind: "redirect", miss: null, hits: Math.min(Math.max(b.by ?? 1, 1), 10), linkId: b.linkId });
+    return json({ ok: true });
+  }),
+});
+
+// What the edge decided a search is worth reporting (lib/activity.ts), sent after the redirect.
+http.route({
+  path: "/api/seen",
+  method: "POST",
+  handler: httpAction(async (ctx, req) => {
+    const b = (await req.json().catch(() => ({}))) as { t?: string; kind?: string; miss?: string | null; hits?: number; linkId?: string };
+    if (!b.t) return json({ error: "t is required" }, 400);
+    const miss = typeof b.miss === "string" && b.miss.length <= 40 ? b.miss : null;
+    await ctx.runMutation(internal.activity.record, {
+      tokenHash: hashToken(b.t), kind: String(b.kind ?? ""), miss, hits: Number(b.hits) || 0, linkId: typeof b.linkId === "string" ? b.linkId : undefined,
+    });
     return json({ ok: true });
   }),
 });

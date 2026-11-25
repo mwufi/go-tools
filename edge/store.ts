@@ -1,6 +1,7 @@
 // Where an edge keeps its copy of the shortcuts. The Worker uses D1
 // (worker/src/d1.ts); Cloud Run keeps it in memory (MemoryStore below).
 import type { LinkLite, Source } from "../convex/lib/core";
+import { didYouMean } from "../convex/lib/fuzzy";
 import type { Change, Dump, EdgeLearned, EdgeTeam, EdgeToken, EdgeUser } from "../convex/lib/edgeRows";
 
 /** "empty" = never synced; "unknown-token" = a token we don't have. */
@@ -95,7 +96,10 @@ export class MemoryStore implements Store {
     const user = this.userFor(tokenHash) ?? null;
     const scopes = new Set(user ? [user.id, ...user.teamIds, "global"] : ["global"]);
     const out = new Set<string>();
-    for (const l of this.links.values()) if (scopes.has(l.scopeId) && l.keyword.startsWith(prefix)) out.add(l.keyword);
+    const all = new Set<string>();
+    for (const l of this.links.values()) if (scopes.has(l.scopeId)) all.add(l.keyword);
+    for (const k of all) if (k.startsWith(prefix)) out.add(k);
+    if (!out.size) return didYouMean(prefix, all); // "revews" -> reviews
     return [...out].sort().slice(0, 8);
   }
 }

@@ -64,6 +64,18 @@ export const setJoinHash = internalMutation({
   },
 });
 
+/** What an invite link points at, so a signed-in person can confirm before joining. */
+export const peekInvite = query({
+  args: { token: v.optional(v.string()), code: v.string() },
+  handler: async (ctx, args) => {
+    const team = await ctx.db.query("teams").withIndex("by_join", (q) => q.eq("joinCodeHash", joinHash(args.code))).unique();
+    if (!team) return null;
+    const user = args.token ? await requireUser(ctx, args.token) : null;
+    const member = user && (await ctx.db.query("members").withIndex("by_team_user", (q) => q.eq("teamId", team._id).eq("userId", user._id)).unique());
+    return { name: team.name, slug: team.slug, already: !!member };
+  },
+});
+
 export const join = mutation({
   args: { token: v.string(), code: v.string() },
   handler: async (ctx, args) => {

@@ -10,6 +10,8 @@ export default defineSchema({
     llmEnabled: v.boolean(),
     llmMy: v.boolean(), // also ask the LLM for unmatched "my ..." queries
     primaryTeamId: v.optional(v.id("teams")),
+    firstSearchAt: v.optional(v.number()), // set by the first search we hear about: setup works
+    trackMisses: v.optional(v.boolean()), // false = don't keep missed searches (default on)
   }),
 
   tokens: defineTable({
@@ -74,6 +76,36 @@ export default defineSchema({
     kept: v.boolean(),
     ms: v.number(),
   }).index("by_user_query", ["userId", "queryNorm"]),
+
+  // Searches per person per UTC day, for "your week" on the home page.
+  // shortcuts is sampled (1 in 10, counted as 10), web counts every miss.
+  usage: defineTable({
+    userId: v.id("users"),
+    day: v.string(), // YYYY-MM-DD, UTC
+    shortcuts: v.number(),
+    web: v.number(),
+  }).index("by_user_day", ["userId", "day"]),
+
+  // One- and two-word queries that found no shortcut, kept 30 days so we can
+  // suggest making one ("you searched standup 4 times"). Private to the person;
+  // teams only see keywords that several teammates tried, as a count.
+  misses: defineTable({
+    userId: v.id("users"),
+    query: v.string(), // normalized
+    count: v.number(),
+    lastAt: v.number(),
+    dismissed: v.boolean(),
+  })
+    .index("by_user_query", ["userId", "query"])
+    .index("by_user_last", ["userId", "lastAt"])
+    .index("by_last", ["lastAt"]),
+
+  // One-time codes for signing in on another device (10 minutes, single use).
+  loginCodes: defineTable({
+    userId: v.id("users"),
+    codeHash: v.string(),
+    expiresAt: v.number(),
+  }).index("by_hash", ["codeHash"]),
 
   // Numbered change feed for the edges (see edge.ts). row null = deleted.
   edgeLog: defineTable({

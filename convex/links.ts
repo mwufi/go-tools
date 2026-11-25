@@ -2,7 +2,7 @@ import { edgeChanged } from "./edge";
 import { v } from "convex/values";
 import { internalMutation, mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { requireMember, requireUser, teamIdsFor, userByHash } from "./lib/auth";
+import { requireMember, requireUser, teamIdsFor } from "./lib/auth";
 import { normalizeKeyword, validateKeyword, validateUrl } from "./lib/go";
 
 const scopeArg = v.union(v.literal("user"), v.object({ teamId: v.id("teams") }));
@@ -209,17 +209,6 @@ export const bump = internalMutation({
   },
 });
 
-export const bumpFromEdge = internalMutation({
-  args: { tokenHash: v.string(), linkId: v.string(), by: v.number() },
-  handler: async (ctx, a) => {
-    const user = await userByHash(ctx, a.tokenHash);
-    const id = ctx.db.normalizeId("links", a.linkId);
-    if (!user || !id) return;
-    const l = await ctx.db.get(id);
-    if (l) await ctx.db.patch(id, { clicks: l.clicks + a.by });
-  },
-});
-
 /** Shortcuts most related to a query, for the LLM prompt and suggestions. */
 export const related = query({
   args: { token: v.optional(v.string()), q: v.string(), limit: v.optional(v.number()) },
@@ -236,5 +225,42 @@ export const related = query({
       );
     }
     return out.map((l) => ({ keyword: l.keyword, url: l.url, description: l.description, scope: l.scope }));
+  },
+});
+
+/**
+ * Add many shortcuts at once (import from bookmarks or a CSV). Never overwrites:
+ * a keyword that's already taken in that scope is skipped and reported back.
+ */
+export const importMany = mutation({
+  args: {
+    token: v.string(),
+    scope: scopeArg,
+    items: v.array(v.object({ keyword: v.string(), url: v.string(), description: v.optional(v.string()) })),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx, args.token);
+    const scope = await scopeFor(ctx, user, args.scope);
+    if (args.items.length > 300) throw new Error("Import at most 300 at a time");
+    let created = 0;
+    const skipped: { keyword: string; reason: string }[] = [];
+    for (const item of args.items) {
+      try {
+        const keyword = validateKeyword(item.keyword);
+        const taken = await ctx.db
+          .query("links")
+          .withIndex("by_scope_keyword", (q) => q.eq("scopeId", scope.scopeId).eq("keyword", keyword))
+          .unique();
+        if (taken) {
+          skipped.push({ keyword, reason: "already exists" });
+          continue;
+        }
+        await upsertLink(ctx, user, scope, item);
+        created++;
+      } catch (e) {
+        skipped.push({ keyword: item.keyword, reason: (e as Error).message });
+      }
+    }
+    return { created, skipped };
   },
 });

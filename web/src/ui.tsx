@@ -162,3 +162,8 @@ export function Arrow() {
     </svg>
   );
 }
+
+/** A link that signs someone up (or, if they're signed in, offers to join) with a team's code. */
+export function inviteLink(code: string) {
+  return `${location.origin}/?invite=${encodeURIComponent(code)}`;
+}

@@ -4,7 +4,7 @@ import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { useSession } from "../store";
 import { linkProps, navigate } from "../router";
-import { CopyField, ShaderCanvas, errText, useToast } from "../ui";
+import { CopyField, ShaderCanvas, errText, inviteLink, useToast } from "../ui";
 import { VarsEditor } from "./Settings";
 
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -147,8 +147,8 @@ export function Team({ slug }: { slug: string }) {
         </div>
         {code && (
           <div style={{ marginBottom: 18 }}>
-            <CopyField value={code} />
-            <p className="hint">Send this join code. Anyone with it can join and edit team shortcuts. Making a new one turns off the old one.</p>
+            <CopyField value={inviteLink(code)} label="Copy link" />
+            <p className="hint">Send this link. It signs people up and puts them on {team.name} in one step (the code is <code>{code}</code> if they'd rather paste it). Anyone with it can join and edit team shortcuts. Making a new one turns off the old one.</p>
           </div>
         )}
         <div className="members">
@@ -181,6 +181,8 @@ export function Team({ slug }: { slug: string }) {
         </div>
       </section>
 
+      <TeamWanted teamId={teamId} />
+
       <section className="team-section">
         <div className="section-head"><h2>Team variables</h2></div>
         <p className="muted" style={{ marginTop: 0 }}>Team shortcuts fill <code>{"{team.name}"}</code> placeholders from these.</p>
@@ -192,5 +194,27 @@ export function Team({ slug }: { slug: string }) {
       </div>
       {toast}
     </div>
+  );
+}
+
+/** Keywords several teammates tried that no shortcut answers yet. Counts only, never who. */
+function TeamWanted({ teamId }: { teamId: Id<"teams"> }) {
+  const session = useSession()!;
+  const wanted = useQuery(api.activity.teamWanted, { token: session.apiToken, teamId });
+  if (!wanted?.length) return null;
+  return (
+    <section className="team-section">
+      <div className="section-head"><h2>Missing shortcuts</h2></div>
+      <p className="muted" style={{ marginTop: 0 }}>Several of you searched for these in the last 30 days and nothing came up.</p>
+      <div className="nudge-list">
+        {wanted.map((w) => (
+          <div className="nudge" key={w.query}>
+            <span className="q">go/{w.query}</span>
+            <span className="why">{w.people} people tried it</span>
+            <a className="btn small" {...linkProps(`/new?k=${encodeURIComponent(w.query)}&team=${teamId}`)}>Add it</a>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }

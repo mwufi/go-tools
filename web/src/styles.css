@@ -299,3 +299,34 @@ textarea.input { height: auto; padding: 10px 12px; resize: vertical; font: inher
   .member .actions { grid-column: 2 / -1; justify-content: flex-start; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* ---------------------------------------------------------------- nudges, onboarding, feed */
+.status { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-2); margin-top: 16px; }
+.status .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--signal); animation: pulse 1.4s ease-in-out infinite; flex: none; }
+.status.ok { color: var(--good); font-weight: 500; }
+.status.ok .pulse { background: var(--good); animation: none; }
+@keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.7); } }
+.step { display: grid; grid-template-columns: 34px 1fr; gap: 6px 14px; padding: 28px 0; border-top: 1px solid var(--rule-2); }
+.step .n { font: 500 12px var(--mono); color: var(--ink-3); padding-top: 6px; }
+.step h3 { margin: 0 0 6px; font: 400 26px var(--serif); }
+.step p { margin: 0 0 14px; color: var(--ink-2); max-width: 560px; }
+.bookmarklet { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 14px; border-radius: 999px; border: 1.5px dashed var(--signal); color: var(--signal); font: 500 13.5px var(--mono); text-decoration: none; cursor: grab; background: var(--signal-soft); }
+.weekline { display: flex; gap: 18px; flex-wrap: wrap; margin: 18px 4px 0; font-size: 13px; color: var(--ink-3); }
+.weekline b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.nudges { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-top: 36px; }
+.nudges .card { padding: 18px 20px; }
+.nudge-list { display: grid; gap: 10px; margin-top: 12px; }
+.nudge { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; }
+.nudge .q { font: 500 14px var(--mono); }
+.nudge .why { color: var(--ink-3); font-size: 12.5px; flex: 1; min-width: 120px; }
+.feed-item { display: flex; align-items: baseline; gap: 10px; font-size: 14px; text-decoration: none; color: inherit; padding: 4px 0; }
+.feed-item .kw { font: 500 14px var(--mono); }
+.feed-item .new { width: 6px; height: 6px; border-radius: 50%; background: var(--signal); flex: none; align-self: center; }
+.feed-item .who { color: var(--ink-3); font-size: 12.5px; margin-left: auto; white-space: nowrap; }
+.banner { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 24px; padding: 14px 18px; border-radius: 12px; background: var(--signal-soft); border: 1px solid color-mix(in srgb, var(--signal) 30%, transparent); }
+.banner .grow { flex: 1; min-width: 200px; }
+.import-table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 13.5px; }
+.import-table td { padding: 6px 8px 6px 0; border-top: 1px solid var(--rule-2); vertical-align: middle; }
+.import-table input[type="text"] { width: 100%; min-width: 90px; }
+.import-table .u { font: 12px var(--mono); color: var(--ink-3); max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 640px) { .import-table .u { max-width: 140px; } }

@@ -49,14 +49,43 @@ export function Landing({ signedOutReason }: { signedOutReason?: string }) {
   const [token, setToken] = useState("");
   const [err, setErr] = useState(signedOutReason ?? "");
   const [busy, setBusy] = useState(false);
-  const check = useQuery(api.users.me, mode === "token" && token.startsWith("goa_") ? { token } : "skip");
+  const redeem = useAction(api.users.redeemLoginCode);
+  const check = useQuery(api.users.me, mode === "token" && token.trim().startsWith("goa_") ? { token: token.trim() } : "skip");
+  const inviteParam = new URLSearchParams(location.search).get("invite");
+  const invite = useQuery(api.teams.peekInvite, inviteParam ? { code: inviteParam } : "skip");
+
+  async function signInWithCode(raw: string) {
+    setBusy(true);
+    try {
+      setSession(await redeem({ code: raw }));
+      navigate("/", true);
+    } catch (e) {
+      setErr(errText(e));
+      setMode("token");
+      document.getElementById("join")?.scrollIntoView();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    // A sign-in link from another device: /?login=ABCD-EFGH
+    const login = params.get("login");
+    if (login) void signInWithCode(login);
+    // An invite link: go straight to the form, the code is already filled in.
+    else if (params.get("invite")) setTimeout(() => document.getElementById("join")?.scrollIntoView({ behavior: "smooth" }), 400);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr("");
     if (mode === "token") {
-      if (!check) return setErr("That token doesn't work. Use an API token (it starts with goa_).");
-      setSession({ apiToken: token.trim() });
+      const v = token.trim();
+      if (!v.startsWith("goa_")) return signInWithCode(v); // a sign-in code from Settings → Other devices
+      if (!check) return setErr("That token doesn't work. Use an API token (it starts with goa_) or a sign-in code.");
+      setSession({ apiToken: v });
       navigate("/settings#browser", true);
       return;
     }
@@ -124,7 +153,8 @@ export function Landing({ signedOutReason }: { signedOutReason?: string }) {
 
       <section className="section signup" id="join">
         <div>
-          <h2 className="title">Claim your <em>go/</em></h2>
+          <h2 className="title">{invite ? <>Join <em>{invite.name}</em></> : <>Claim your <em>go/</em></>}</h2>
+          {invite && <p style={{ marginTop: 14 }}>You've been invited. Sign up and you'll have the team's shortcuts right away.</p>}
           <p className="muted" style={{ maxWidth: 420, marginTop: 14 }}>
             Your GitHub username fills in shortcuts like <code>my prs</code>. You'll get a private search address for your browser, and nothing is shared until you add it to a team.
           </p>
@@ -132,7 +162,7 @@ export function Landing({ signedOutReason }: { signedOutReason?: string }) {
         <form className="card form-grid" onSubmit={submit}>
           <div className="seg" style={{ justifySelf: "start" }}>
             <button type="button" className={mode === "join" ? "on" : ""} onClick={() => setMode("join")}>New here</button>
-            <button type="button" className={mode === "token" ? "on" : ""} onClick={() => setMode("token")}>I have a token</button>
+            <button type="button" className={mode === "token" ? "on" : ""} onClick={() => setMode("token")}>I have a code</button>
           </div>
           {mode === "join" ? (
             <>
@@ -141,7 +171,7 @@ export function Landing({ signedOutReason }: { signedOutReason?: string }) {
               <label className="field"><span>Invite or team code</span><input className="input mono" value={code} onChange={(e) => setCode(e.target.value)} placeholder="from whoever runs this go" /></label>
             </>
           ) : (
-            <label className="field"><span>API token</span><input className="input mono" value={token} onChange={(e) => setToken(e.target.value)} placeholder="goa_…" autoFocus /><span className="hint">Make one in Settings on a device where you're signed in.</span></label>
+            <label className="field"><span>Sign-in code or API token</span><input className="input mono" value={token} onChange={(e) => setToken(e.target.value)} placeholder="ABCD-EFGH or goa_…" autoFocus /><span className="hint">On a device where you're signed in, open Settings → Other devices to get a code.</span></label>
           )}
           {err && <div className="error">{err}</div>}
           <button className="btn primary" disabled={busy} style={{ justifySelf: "start" }}>
