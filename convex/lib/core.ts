@@ -1,7 +1,7 @@
 // Resolution logic shared by the Convex resolver and the edge Worker.
 // No Convex imports: callers provide a Source that reads from the database
 // (Convex) or from a cached snapshot (the Worker).
-import { candidates, fillTemplate, normalizeQuery, parseQuery, searchUrl } from "./go";
+import { argsFit, candidates, fillTemplate, normalizeQuery, parseQuery, searchUrl } from "./go";
 
 export type Vars = Record<string, string>;
 export type LinkLite = { id: string; scope: "global" | "team" | "user"; scopeId: string; keyword: string; url: string; emptyUrl?: string };
@@ -36,6 +36,9 @@ export async function resolveWith(src: Source, q: string, llmAvailable: boolean)
         const link = await src.link(scopeId, c.keyword);
         if (!link) continue;
         const args = parsed.words.slice(c.n);
+        // Words the template has no slot for: not this shortcut. Keep looking
+        // (another scope's link may take args), else fall through to search.
+        if (!argsFit(link.url, args)) continue;
         const teamId = link.scope === "team" ? link.scopeId : primary;
         const vars = { me: user?.vars ?? {}, team: teamId ? await src.teamVars(teamId) : {} };
         let url = fillTemplate(link.url, args, vars);

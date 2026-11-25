@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { candidates, fillTemplate, parseQuery, searchUrl, validateKeyword } from "../convex/lib/go.ts";
+import { argsFit, candidates, fillTemplate, maxArgs, parseQuery, searchUrl, validateKeyword } from "../convex/lib/go.ts";
 import { sha256Hex } from "../convex/lib/sha256.ts";
 
 const vars = { me: { github: "mwufi" }, team: { github_org: "a16z-NewMedia" } };
@@ -32,6 +32,19 @@ test("templates", () => {
   assert.equal(fillTemplate("https://x?q=%s", ["hi"], vars), "https://x?q=hi");
   assert.equal(fillTemplate("https://x/{1}", [], vars), null, "missing arg");
   assert.equal(fillTemplate("https://x/{me.linear}", [], vars), null, "missing var");
+});
+
+test("extra words only fit templates with a slot for them", () => {
+  assert.equal(maxArgs("https://convex.dev"), 0);
+  assert.equal(maxArgs("https://github.com/{me.github}"), 0);
+  assert.equal(maxArgs("https://x/{1}/{2}"), 2);
+  assert.equal(maxArgs("https://github.com/{*}"), Infinity);
+  assert.equal(maxArgs("https://x?q=%s"), Infinity);
+  assert.equal(argsFit("https://convex.dev", []), true);
+  assert.equal(argsFit("https://convex.dev", ["components"]), false);
+  assert.equal(argsFit("https://x/{1}", ["3297"]), true);
+  assert.equal(argsFit("https://x/{1}", ["3297", "extra"]), false);
+  assert.equal(argsFit("https://github.com/{*}", ["a", "b", "c"]), true);
 });
 
 test("keyword validation", () => {
